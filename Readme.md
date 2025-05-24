@@ -88,7 +88,7 @@ Vaultパスワードいれる。
 ## 動作確認
 
 ```
-curl http://192.168.11.10:9187/metrics | grep pg_up
+curl http://192.168.11.10:9187/metrics | grep "pg_up 1"
 
 →　"pg_up 1"が返ってくること。
 ```
