@@ -33,6 +33,7 @@
         target_roles: "{{ pg_user }}"
         state: "{{ deploy_state }}"
       become_user: postgres
+      when: deploy_state == 'present'
 
     - name: pg_hba.confにexporter用の許可設定追加または削除
       community.postgresql.postgresql_pg_hba:
