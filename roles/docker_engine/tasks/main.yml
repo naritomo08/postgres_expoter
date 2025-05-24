@@ -1,0 +1,12 @@
+---
+- name: Include OS-specific tasks
+  include_tasks: "{{ item }}"
+  when: ansible_os_family | lower in item | lower
+  loop:
+    - debian.yml        # Debian/Ubuntu 系
+    - redhat.yml        # RHEL/AlmaLinux/Rocky 系
+
+- name: Refresh package facts so ansible_facts.packages contains docker
+  ansible.builtin.package_facts:      # ← setup ではなく package_facts
+    manager: auto
+  when: deploy_state == 'present'

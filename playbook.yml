@@ -1,0 +1,22 @@
+---
+# ───────────────────────────── ①  導入モード (deploy_state=present) ─────────────────────────────
+- name: Install stack when deploy_state=present
+  hosts: exporter_host
+  become: true
+  vars:
+    apply: "{{ deploy_state | default('present') == 'present' }}"
+  roles:
+    - { role: docker_engine,       when: apply }      # ① 先に Docker/Compose
+    - { role: postgres_exporter,   when: apply }      # ② その上に Exporter
+    - { role: postgres_exporter_user,       when: apply } # ③ Exporter ユーザを作成
+
+# ───────────────────────────── ②  撤去モード (deploy_state=absent) ─────────────────────────────
+- name: Remove stack when deploy_state=absent
+  hosts: exporter_host
+  become: true
+  vars:
+    apply: "{{ deploy_state | default('present') == 'absent' }}"
+  roles:
+    - { role: postgres_exporter_user,       when: apply } # ① Exporter ユーザを削除
+    - { role: postgres_exporter,   when: apply }      # ② Exporter/secret/compose を削除
+    - { role: docker_engine,       when: apply }      # ③ 最後に Docker/Compose をアンインストール

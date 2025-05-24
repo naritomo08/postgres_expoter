@@ -1,0 +1,20 @@
+services:
+  postgres-exporter:
+    image: prometheuscommunity/postgres-exporter:{{ exporter_version }}
+    # ────────────── エントリポイントを書き直し ──────────────
+    entrypoint: >-
+      /bin/sh -c '
+      dsn="postgresql://{{ pg_user }}:$$(cat /run/secrets/pgexp_pass)@{{ pg_host }}:{{ pg_port }}/{{ pg_db }}?sslmode=disable";
+      export DATA_SOURCE_NAME="$$dsn";
+      exec /bin/postgres_exporter --web.listen-address=:9187
+      '
+    # ----------------------------------------------------------
+    secrets:
+      - source: pgexp_pass
+    restart: unless-stopped
+    ports:
+      - "9187:9187"
+
+secrets:
+  pgexp_pass:
+    file: ./pgexp_pass.txt

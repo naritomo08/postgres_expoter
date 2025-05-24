@@ -1,0 +1,2 @@
+exporter_dir: "/opt/postgres-exporter"
+secret_name:  "pgexp_pass"

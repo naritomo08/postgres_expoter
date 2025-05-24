@@ -1,0 +1,92 @@
+###############################################################################
+# deploy_state=present のときだけ実行 ───────────────────────────────────────────
+###############################################################################
+- block:
+    - name: DNF キャッシュをクリア
+      command: dnf clean all
+      when: deploy_state == 'present'
+
+    - name: DNF メタデータを更新
+      command: dnf makecache
+      when: deploy_state == 'present'
+
+    # ── config-manager 用プラグイン
+    - name: dnf-plugins-core をインストール（config-manager 用）
+      dnf:
+        name: dnf-plugins-core
+        state: present
+
+    # ── AlmaLinux9 で必要なリポジトリを有効化
+    - name: CRB リポジトリを有効化（slirp4netns 用）
+      command: dnf config-manager --set-enabled crb
+
+    - name: Extras リポジトリを有効化（container-selinux 用）
+      command: dnf config-manager --set-enabled extras
+
+    # ── Docker 用リポジトリ
+    - name: Add Docker repo
+      get_url:
+        url: https://download.docker.com/linux/centos/docker-ce.repo
+        dest: /etc/yum.repos.d/docker-ce.repo
+        mode: "0644"
+
+    - name: Disable nightly & test repo
+      ini_file:
+        path: /etc/yum.repos.d/docker-ce.repo
+        section: "{{ repo_name }}"
+        option: enabled
+        value: "0"
+      loop:
+        - docker-ce-nightly
+        - docker-ce-test
+      loop_control:
+        loop_var: repo_name
+
+    - name: Install Docker Engine & Compose v2
+      dnf:
+        name:
+          - docker-ce
+          - docker-ce-cli
+          - containerd.io
+          - docker-buildx-plugin
+          - docker-compose-plugin
+        state: present
+        allowerasing: true
+
+    - name: Enable & start docker service
+      service:
+        name: docker
+        state: started
+        enabled: true
+
+  when:
+    - deploy_state == 'present'
+    - ansible_distribution == "AlmaLinux"
+    - ansible_distribution_major_version | int == 9
+
+###############################################################################
+# deploy_state=absent のときだけ実行 ───────────────────────────────────────────
+###############################################################################
+- block:
+    - name: Remove Docker Engine & Compose v2
+      dnf:
+        name:
+          - docker-ce
+          - docker-ce-cli
+          - containerd.io
+          - docker-buildx-plugin
+          - docker-compose-plugin
+        state: absent
+
+    - name: Stop & disable docker service
+      service:
+        name: docker
+        state: stopped
+        enabled: false
+      ignore_errors: true
+
+    - name: Remove docker repo file
+      file:
+        path: /etc/yum.repos.d/docker-ce.repo
+        state: absent
+  when: deploy_state == 'absent'

@@ -1,0 +1,59 @@
+- name: PostgreSQL用pythonライブラリをインストール (Debian系)
+  apt:
+    name: python3-psycopg2
+    state: present
+  when: ansible_os_family == 'Debian'
+
+- name: PostgreSQL用pythonライブラリをインストール (RHEL系)
+  dnf:
+    name: python3-psycopg2
+    state: present
+  when: ansible_os_family == 'RedHat'
+
+- block:
+    - name: 作業前にpg_hba.confをバックアップ
+      copy:
+        src: "{{ postgres_pg_hba_path }}"
+        dest: "{{ postgres_pg_hba_path }}.bak"
+        remote_src: true
+      when: deploy_state == 'present'
+
+    - name: exporter_user 作成または削除
+      community.postgresql.postgresql_user:
+        name: "{{ pg_user }}"
+        password: "{{ pgexp_pass }}"
+        db: postgres
+        state: "{{ deploy_state }}"
+        encrypted: true
+      become_user: postgres
+
+    - name: exporter_userのpg_monitorロール付与または削除
+      community.postgresql.postgresql_membership:
+        group: pg_monitor
+        target_roles: "{{ pg_user }}"
+        state: "{{ deploy_state }}"
+      become_user: postgres
+
+    - name: pg_hba.confにexporter用の許可設定追加または削除
+      community.postgresql.postgresql_pg_hba:
+        dest: "{{ postgres_pg_hba_path }}"
+        contype: host
+        databases: postgres
+        users: "{{ pg_user }}"
+        address: "{{ exporter_allowed_address }}"
+        method: md5
+        create: true
+        state: "{{ deploy_state }}"
+      notify: Reload PostgreSQL
+
+  rescue:
+    - name: エラー時にpg_hba.confをロールバック
+      copy:
+        src: "{{ postgres_pg_hba_path }}.bak"
+        dest: "{{ postgres_pg_hba_path }}"
+        remote_src: true
+      notify: Reload PostgreSQL
+
+    - name: エラー時の通知
+      debug:
+        msg: "エラーが発生したため、設定をロールバックしました。"

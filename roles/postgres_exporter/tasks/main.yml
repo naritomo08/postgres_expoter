@@ -1,0 +1,48 @@
+---
+- name: Ensure exporter directory (present only)
+  file:
+    path: "{{ exporter_dir }}"
+    state: directory
+    owner: root
+    mode: "0755"
+  when: deploy_state == "present"
+
+# ── Secret ファイルを配置 ─────────────────────────────────────────
+- name: Write password file for exporter
+  copy:
+    content: "{{ pgexp_pass | trim }}"
+    dest: "{{ exporter_dir }}/pgexp_pass.txt"
+    owner: root
+    mode: "0444"
+  when: deploy_state == 'present'
+
+# ── docker-compose でコンテナ作成/削除 ───────────────────────
+- name: Render compose file (present only)
+  template:
+    src: docker-compose-single.yml.j2
+    dest: "{{ exporter_dir }}/docker-compose.yml"
+    mode: "0600"
+  when: deploy_state == "present"
+
+- name: Start exporter via CLI
+  shell: docker compose up -d
+  args:
+    chdir: "{{ exporter_dir }}"
+  when: deploy_state == 'present'
+
+- name: Stop exporter via CLI
+  shell: docker compose down
+  args:
+    chdir: "{{ exporter_dir }}"
+  when: deploy_state == 'absent'
+
+# ── ディレクトリ掃除 (rollback) ───────────────────────────────
+- file:
+    path: "{{ exporter_dir }}"
+    state: absent
+  when: deploy_state == "absent"
+
+- file:
+    path: "{{ exporter_dir }}/pgexp_pass.txt"
+    state: absent
+  when: deploy_state == 'absent'

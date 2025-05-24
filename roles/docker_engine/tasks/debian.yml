@@ -1,0 +1,44 @@
+---
+- name: Install prerequisite packages
+  apt:
+    update_cache: yes
+    pkg:
+      - ca-certificates
+      - curl
+      - gnupg
+      - lsb-release
+  when: deploy_state == "present"
+
+- name: Add Docker GPG key
+  apt_key:
+    url: https://download.docker.com/linux/ubuntu/gpg
+    state: present
+  when: deploy_state == "present"
+
+- name: Add Docker apt repo
+  apt_repository:
+    repo: >
+      deb [arch={{ ansible_architecture }}
+           signed-by=/usr/share/keyrings/docker-archive-keyring.gpg]
+          https://download.docker.com/linux/ubuntu
+          {{ ansible_distribution_release }} stable
+    filename: docker
+    state: present
+  when: deploy_state == "present"
+
+- name: Install / Remove Docker Engine & Compose v2
+  apt:
+    update_cache: yes
+    pkg:
+      - docker-ce
+      - docker-ce-cli
+      - containerd.io
+      - docker-compose-plugin
+    state: "{{ deploy_state }}"
+  when: deploy_state in ['present', 'absent']
+
+- name: Enable / Disable docker service
+  service:
+    name: docker
+    state: "{{ 'started' if deploy_state == 'present' else 'stopped' }}"
+    enabled: "{{ deploy_state == 'present' }}"
