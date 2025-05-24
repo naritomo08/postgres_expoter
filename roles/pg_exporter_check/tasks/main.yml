@@ -1,0 +1,22 @@
+---
+- name: PostgreSQL Exporter のメトリクス取得
+  uri:
+    url: "http://{{ pg_exporter_host }}:{{ pg_exporter_port }}/metrics"
+    method: GET
+    return_content: yes
+    status_code: 200
+    timeout: 5
+  register: metrics
+
+- name: pg_up が 1 になっていることを検証
+  assert:
+    that:
+      # 文字列パターンを % 演算子で作る
+      - metrics.content | regex_search('^%s\s+1$' % pg_up_metric_name, multiline=True)
+    success_msg: "✅ {{ pg_up_metric_name }} が 1 です"
+    fail_msg: >
+      ❌ {{ pg_up_metric_name }} が 1 ではありません  
+      実際のレスポンス:  
+      {{ metrics.content.splitlines() 
+           | select('search','^' + pg_up_metric_name) 
+           | list }}

@@ -70,25 +70,37 @@ postgres_pg_hba_path: "/var/lib/pgsql/data/pg_hba.conf"
 
 ```
 # ★ 作成（初回／再導入）
-ansible-playbook -i inventory.ini playbook.yml --ask-vault-pass
+ansible-playbook -i inventory.ini pgexp_install.yml --ask-vault-pass
 # └── deploy_state=present (既定)
 Vaultパスワードいれる。
 
 # ★ ロールバック（いつでも取り消し）
-ansible-playbook -i inventory.ini playbook.yml --ask-vault-pass \
+ansible-playbook -i inventory.ini pgexp_install.yml --ask-vault-pass \
   --extra-vars "deploy_state=absent"
 Vaultパスワードいれる。
 
 # ★ バージョン変更しての再度導入（Postgres_Expoterバージョン変更も可）
-ansible-playbook -i inventory.ini playbook.yml --ask-vault-pass \
+ansible-playbook -i inventory.ini pgexp_install.yml --ask-vault-pass \
   --extra-vars 'deploy_state=present exporter_version=v0.16.0'
 Vaultパスワードいれる。
 ```
 
 ## 動作確認
 
+手動：
 ```
 curl http://192.168.11.10:9187/metrics | grep "pg_up 1"
 
 →　"pg_up 1"が返ってくること。
+```
+
+自動:
+```
+ANSIBLE_STDOUT_CALLBACK=oneline \
+ansible-playbook -i inventory.ini pgexp_check.yml
+
+以下の結果が出ること。
+almatest1 | SUCCESS => {    "changed": false,    "msg": "✅ pg_up が 1 です"}
+almatest2 | SUCCESS => {    "changed": false,    "msg": "✅ pg_up が 1 です"}
+
 ```
