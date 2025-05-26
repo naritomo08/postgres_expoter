@@ -2,41 +2,6 @@
 
 ansibleでDockerCompose/Postgre_Expoterを導入するPlaybook
 
-ansibleバージョンが2.15以上であること。
-```
-ansible --version
-```
-
-以下のコマンドで指定バージョンにアップグレード可能
-```
-python -m pip install --upgrade pip
-python -m pip install "ansible-core>=2.15,<2.16" --user
-```
-
-## 監視用DBアカウント作成
-
-DBサーバにログイン
-ここで設定したユーザ、パスは控える。
-```
-sudo -i
-su - postgres
-psql
-CREATE ROLE pgexp WITH LOGIN PASSWORD 'S3curePW';
-GRANT pg_monitor TO pgexp;
-Ctrl + Cで抜ける
-```
-
-## DBへのホストアクセス許可追加
-
-```
-sudo vi /var/lib/pgsql/data/pg_hba.conf
-
-最終行に追記
-host    all             all             172.18.0.0/16            md5
-
-sudo systemctl reload postgresql
-```
-
 ## DBパスワード設定
 
 以下の方法でPostgres接続パスワードの暗号化を行う。
@@ -60,6 +25,7 @@ vi groups_vars
 
 監視対象のDBホスト、パスワード設定
 pg_host: "172.17.0.1"
+pg_user: "pgexp"
 pg_port: 5432
 
 監視対象DBのアクセス許可ファイルパス
