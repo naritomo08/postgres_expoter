@@ -4,21 +4,21 @@
     dest: /etc/yum/yum.repos.d/almalinux-baseos.repo.bak
     remote_src: true
     backup: no
-  when: repo_state == 'present'
+  when: deploy_state == 'present'
 
 - name: baseos.repo を新しい内容に置き換え（present 時）
   copy:
     src: files/almalinux-baseos.repo.new
     dest: /etc/yum/yum.repos.d/almalinux-baseos.repo
     mode: '0644'
-  when: repo_state == 'present'
+  when: deploy_state == 'present'
 
 - name: baseos.repo をバックアップから復元（absent 時）
   copy:
     src: /etc/yum/yum.repos.d/almalinux-baseos.repo.bak
     dest: /etc/yum/yum.repos.d/almalinux-baseos.repo
     remote_src: true
-  when: repo_state == 'absent'
+  when: deploy_state == 'absent'
 
 - name: PostgreSQL用pythonライブラリをインストール (Debian系)
   apt:
