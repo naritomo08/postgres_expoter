@@ -19,13 +19,11 @@
 - name: 各ポートの pg_up を検証する
   assert:
     that:
-      # 正規表現は Jinja の外で文字列を作る
       - metrics.content | regex_search('^%s\s+1$' % pg_up_metric_name, multiline=True)
-    success_msg: "✅ {{ pg_up_metric_name }} が 1 です ({{ pg_exporter_host }}:{{ item_port }})"
-    fail_msg: "❌ {{ pg_up_metric_name }} が 1 ではありません ({{ pg_exporter_host }}:{{ item_port }})"
+    success_msg: "✅ {{ pg_up_metric_name }} が 1 です ({{ pg_exporter_host }}:{{ metrics.item_port }})"
+    fail_msg: "❌ {{ pg_up_metric_name }} が 1 ではありません ({{ pg_exporter_host }}:{{ metrics.item_port }})"
   loop: "{{ metrics_results.results }}"
   loop_control:
     loop_var: metrics
   vars:
-    # ループ対象要素(metrics)内の item_port を取り出し直してメッセージに使う
     item_port: "{{ metrics.item_port }}"
