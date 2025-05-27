@@ -68,20 +68,11 @@ Vaultパスワードいれる。
 
 ## 動作確認
 
-手動：
-```
-curl http://192.168.11.12:9187/metrics | grep "pg_up 1"
-
-→　"pg_up 1"が返ってくること。
-```
-
-自動:
 ```
 ANSIBLE_STDOUT_CALLBACK=oneline \
 ansible-playbook -i inventory.ini pgexp_check.yml
 
 以下の結果が出ること。
-almatest1 | SUCCESS => {    "changed": false,    "msg": "✅ pg_up が 1 です"}
-almatest2 | SUCCESS => {    "changed": false,    "msg": "✅ pg_up が 1 です"}
+almatest3 | SUCCESS => {    "changed": false,    "msg": "✅ pg_up が 1 です"}
 
 ```
