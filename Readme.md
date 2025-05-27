@@ -34,6 +34,8 @@ postgres_pg_hba_path: "/var/lib/pgsql/data/pg_hba.conf"
 
 ## 起動方法
 
+### postgres_Exporter導入
+
 ```
 # ★ 作成（初回／再導入）
 ansible-playbook -i inventory.ini pgexp_install.yml --ask-vault-pass
@@ -51,11 +53,24 @@ ansible-playbook -i inventory.ini pgexp_install.yml --ask-vault-pass \
 Vaultパスワードいれる。
 ```
 
+### postgresSQL設定
+```
+# ★ 作成（初回／再導入）
+ansible-playbook -i inventory.ini postgres_setup.yml --ask-vault-pass
+# └── deploy_state=present (既定)
+Vaultパスワードいれる。
+
+# ★ ロールバック（いつでも取り消し）
+ansible-playbook -i inventory.ini postgres_setup.yml --ask-vault-pass \
+  --extra-vars "deploy_state=absent"
+Vaultパスワードいれる。
+```
+
 ## 動作確認
 
 手動：
 ```
-curl http://192.168.11.10:9187/metrics | grep "pg_up 1"
+curl http://192.168.11.12:9187/metrics | grep "pg_up 1"
 
 →　"pg_up 1"が返ってくること。
 ```
