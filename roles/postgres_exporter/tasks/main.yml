@@ -7,42 +7,48 @@
     mode: "0755"
   when: deploy_state == "present"
 
-# ── Secret ファイルを配置 ─────────────────────────────────────────
-- name: Write password file for exporter
-  copy:
-    content: "{{ pgexp_pass | trim }}"
-    dest: "{{ exporter_dir }}/pgexp_pass.txt"
-    owner: root
-    mode: "0444"
+# ── Swarm初期化（初回のみ） ─────────────────────────────
+- name: Initialize Docker Swarm (only if not already)
+  shell: docker swarm init || true
   when: deploy_state == 'present'
 
-# ── docker-compose でコンテナ作成/削除 ───────────────────────
-- name: Render compose file (present only)
+# ── Secret 登録（再作成） ───────────────────────────────
+- name: Remove existing Docker secret (if exists)
+  shell: docker secret rm pgexp_pass || true
+  when: deploy_state == 'present'
+
+- name: Create Docker secret for pgexp_pass
+  shell: echo "{{ pgexp_pass | trim }}" | docker secret create pgexp_pass -
+  when: deploy_state == 'present'
+
+# ── Composeファイル生成（Swarm用） ───────────────────────
+- name: Render stack-compatible compose file
   template:
     src: docker-compose-single.yml.j2
     dest: "{{ exporter_dir }}/docker-compose.yml"
     mode: "0600"
   when: deploy_state == "present"
 
-- name: Start exporter via CLI
-  shell: docker compose up -d
+# ── Swarm スタックデプロイ ───────────────────────────────
+- name: Deploy exporter stack
+  shell: docker stack deploy -c docker-compose.yml postgres_exporter
   args:
     chdir: "{{ exporter_dir }}"
   when: deploy_state == 'present'
 
-- name: Stop exporter via CLI
-  shell: docker compose down
-  args:
-    chdir: "{{ exporter_dir }}"
+# ── Swarm スタック削除（停止）──────────────────────────────
+- name: Remove exporter stack
+  shell: docker stack rm postgres_exporter
   when: deploy_state == 'absent'
 
-# ── ディレクトリ掃除 (rollback) ───────────────────────────────
-- file:
+# ── Secret 削除（オプション）──────────────────────────────
+- name: Remove Docker secret
+  shell: docker secret rm pgexp_pass || true
+  when: deploy_state == 'absent'
+
+# ── ディレクトリ削除（rollback）────────────────────────────
+- name: Remove exporter directory
+  file:
     path: "{{ exporter_dir }}"
     state: absent
   when: deploy_state == "absent"
-
-- file:
-    path: "{{ exporter_dir }}/pgexp_pass.txt"
-    state: absent
-  when: deploy_state == 'absent'
