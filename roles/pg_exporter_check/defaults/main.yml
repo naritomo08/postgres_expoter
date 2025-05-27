@@ -2,4 +2,5 @@
 # デフォルト値。インベントリやプレイブックからオーバーライド可能
 pg_exporter_host: "{{ ansible_host | default(inventory_hostname) }}"
 pg_exporter_port: 9187
+pg_exporter_ports: [9187,9188]
 pg_up_metric_name: "pg_up"

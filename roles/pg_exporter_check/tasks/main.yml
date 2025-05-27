@@ -1,22 +1,31 @@
----
-- name: PostgreSQL Exporter のメトリクス取得
+- name: ポートリストを準備する
+  set_fact:
+    ports_list: "{{ pg_exporter_ports | default([pg_exporter_port]) }}"
+  # pg_exporter_ports が空 or 未定義 なら [pg_exporter_port] を使い、
+  # 定義されていればそのままリストとして ports_list に設定
+
+- name: 各ポートに対してメトリクスを取得する
   uri:
-    url: "http://{{ pg_exporter_host }}:{{ pg_exporter_port }}/metrics"
+    url: "http://{{ pg_exporter_host }}:{{ item_port }}/metrics"
     method: GET
     return_content: yes
     status_code: 200
     timeout: 5
-  register: metrics
+  register: metrics_results
+  loop: "{{ ports_list }}"
+  loop_control:
+    loop_var: item_port
 
-- name: pg_up が 1 になっていることを検証
+- name: 各ポートの pg_up を検証する
   assert:
     that:
-      # 文字列パターンを % 演算子で作る
+      # 正規表現は Jinja の外で文字列を作る
       - metrics.content | regex_search('^%s\s+1$' % pg_up_metric_name, multiline=True)
-    success_msg: "✅ {{ pg_up_metric_name }} が 1 です"
-    fail_msg: >
-      ❌ {{ pg_up_metric_name }} が 1 ではありません  
-      実際のレスポンス:  
-      {{ metrics.content.splitlines() 
-           | select('search','^' + pg_up_metric_name) 
-           | list }}
+    success_msg: "✅ {{ pg_up_metric_name }} が 1 です ({{ pg_exporter_host }}:{{ item_port }})"
+    fail_msg: "❌ {{ pg_up_metric_name }} が 1 ではありません ({{ pg_exporter_host }}:{{ item_port }})"
+  loop: "{{ metrics_results.results }}"
+  loop_control:
+    loop_var: metrics
+  vars:
+    # ループ対象要素(metrics)内の item_port を取り出し直してメッセージに使う
+    item_port: "{{ metrics.item_port }}"
