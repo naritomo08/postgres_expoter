@@ -1,8 +1,6 @@
 - name: ポートリストを準備する
   set_fact:
     ports_list: "{{ pg_exporter_ports | default([pg_exporter_port]) }}"
-  # pg_exporter_ports が空 or 未定義 なら [pg_exporter_port] を使い、
-  # 定義されていればそのままリストとして ports_list に設定
 
 - name: 各ポートに対してメトリクスを取得する
   uri:
@@ -12,18 +10,14 @@
     status_code: 200
     timeout: 5
   register: metrics_results
+  no_log: true
   loop: "{{ ports_list }}"
   loop_control:
     loop_var: item_port
 
-- name: 各ポートの pg_up を検証する
-  assert:
-    that:
-      - metrics.content | regex_search('^%s\s+1$' % pg_up_metric_name, multiline=True)
-    success_msg: "✅ {{ pg_up_metric_name }} が 1 です ({{ pg_exporter_host }}:{{ metrics.item_port }})"
-    fail_msg: "❌ {{ pg_up_metric_name }} が 1 ではありません ({{ pg_exporter_host }}:{{ metrics.item_port }})"
+- name: 各ポートの pg_up を検証する（複数ポート時のみ）
+  when: ports_list | length > 1
+  include_tasks: check_pgup.yml
   loop: "{{ metrics_results.results }}"
   loop_control:
     loop_var: metrics
-  vars:
-    item_port: "{{ metrics.item_port }}"

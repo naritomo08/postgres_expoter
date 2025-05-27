@@ -1,0 +1,6 @@
+- name: ポート {{ metrics.item_port }} の pg_up を検証
+  assert:
+    that:
+      - metrics.content | regex_search('^%s\s+1$' % pg_up_metric_name, multiline=True)
+    success_msg: "✅ {{ pg_up_metric_name }} が 1 です ({{ pg_exporter_host }}:{{ metrics.item_port }})"
+    fail_msg: "❌ {{ pg_up_metric_name }} が 1 ではありません ({{ pg_exporter_host }}:{{ metrics.item_port }})"
