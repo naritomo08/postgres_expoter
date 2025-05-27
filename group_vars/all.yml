@@ -3,12 +3,9 @@ deploy_state: "present"          # present = 導入 / absent = ロールバッ�
 exporter_version: "v0.17.1"
 
 # 監視対象 DB
-pg_host: "172.17.0.1"
-pg_port: 5432
 pg_db:   "postgres"
 pg_user: "pgexp"
 postgres_pg_hba_path: "/var/lib/pgsql/data/pg_hba.conf"
-exporter_allowed_address: "172.18.0.0/16"
 
 # Vault 変数（暗号化された値）
 pgexp_pass: !vault |
