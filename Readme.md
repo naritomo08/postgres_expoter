@@ -37,17 +37,23 @@ postgres_pg_hba_path: "/var/lib/pgsql/data/pg_hba.conf"
 ### postgres_Exporter導入
 
 ```
-# ★ 作成（初回／再導入）
+#　導入後監視対象DB設定変更やExpoterバージョンしたい際は一度ロールバックして
+　　ソース更新して作成すること。
+
+# Exporterは一度接続されるとDBユーザー消しても接続状態が維持されるため、
+  DBユーザー削除と合わせて行うこと。
+
+# ★ 導入
 ansible-playbook -i inventory.ini pgexp_install.yml --ask-vault-pass
 # └── deploy_state=present (既定)
 Vaultパスワードいれる。
 
-# ★ ロールバック（いつでも取り消し）
+# ★ ロールバック
 ansible-playbook -i inventory.ini pgexp_install.yml --ask-vault-pass \
   --extra-vars "deploy_state=absent"
 Vaultパスワードいれる。
 
-# ★ バージョン変更しての再度導入（Postgres_Expoterバージョン変更も可）
+# ★ Exporterバージョン変更しての再度導入（Postgres_Expoterバージョン変更も可）
 ansible-playbook -i inventory.ini pgexp_install.yml --ask-vault-pass \
   --extra-vars 'deploy_state=present exporter_version=v0.16.0'
 Vaultパスワードいれる。
@@ -55,12 +61,14 @@ Vaultパスワードいれる。
 
 ### postgresSQL設定
 ```
-# ★ 作成（初回／再導入）
+# DBユーザーを再度変更する際は一旦ロールバックしてソース更新して再設定すること。
+
+# ★ 設定
 ansible-playbook -i inventory.ini postgres_setup.yml --ask-vault-pass
 # └── deploy_state=present (既定)
 Vaultパスワードいれる。
 
-# ★ ロールバック（いつでも取り消し）
+# ★ ロールバック
 ansible-playbook -i inventory.ini postgres_setup.yml --ask-vault-pass \
   --extra-vars "deploy_state=absent"
 Vaultパスワードいれる。

@@ -16,6 +16,5 @@
   vars:
     apply: "{{ deploy_state | default('present') == 'absent' }}"
   roles:
-    - { role: postgres_exporter_user,       when: apply } # ① Exporter ユーザを削除
-    - { role: postgres_exporter,   when: apply }      # ② Exporter/secret/compose を削除
-    - { role: docker_engine,       when: apply }      # ③ 最後に Docker/Compose をアンインストール
+    - { role: postgres_exporter,   when: apply }      # ① Exporter/secret/compose を削除
+    - { role: docker_engine,       when: apply }      # ② 最後に Docker/Compose をアンインストール
