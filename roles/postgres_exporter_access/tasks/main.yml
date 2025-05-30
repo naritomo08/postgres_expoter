@@ -1,0 +1,38 @@
+
+- block:
+    - name: 作業前にpg_hba.confをバックアップ
+      copy:
+        src: "{{ postgres_pg_hba_path }}"
+        dest: "{{ postgres_pg_hba_path }}.bak"
+        remote_src: true
+      when: deploy_state == 'present'
+
+    - name: pg_hba.conf に exporter_user の設定を追加（deploy_state == 'present'）
+      lineinfile:
+        path: "{{ postgres_pg_hba_path }}"
+        line: "host    postgres    {{ pg_user }}    {{ exporter_allowed_address }}    md5"
+        create: yes
+        state: present
+        insertafter: EOF
+      when: deploy_state == 'present'
+      notify: Reload PostgreSQL
+
+    - name: pg_hba.conf から exporter_user の設定を削除（deploy_state == 'absent'）
+      lineinfile:
+        path: "{{ postgres_pg_hba_path }}"
+        line: "host    postgres    {{ pg_user }}    {{ exporter_allowed_address }}    md5"
+        state: absent
+      when: deploy_state == 'absent'
+      notify: Reload PostgreSQL
+
+  rescue:
+    - name: エラー時にpg_hba.confをロールバック
+      copy:
+        src: "{{ postgres_pg_hba_path }}.bak"
+        dest: "{{ postgres_pg_hba_path }}"
+        remote_src: true
+      notify: Reload PostgreSQL
+
+    - name: エラー時の通知
+      debug:
+        msg: "エラーが発生したため、設定をロールバックしました。"
