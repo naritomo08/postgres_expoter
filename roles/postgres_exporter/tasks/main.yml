@@ -17,35 +17,39 @@
         state: directory
         mode: "0700"
 
-    ###########################################################################
-    # 2) インスタンスごとに .enc.env を動的生成
-    ###########################################################################
-    - name: Build encrypted secret per exporter   # ←★★ 変更ポイント
-      block:
-        # 2-A) 平文 .env を一時ファイルに生成（no_log で出力抑制）
-        - ansible.builtin.copy:
-            dest: "/tmp/{{ item.name }}.env"
-            content: |
-              DATA_SOURCE_NAME=postgresql://{{ item.db_user }}:{{ item.db_pass }}@{{ item.db_host }}:{{ item.db_port }}/{{ item.db_name }}?sslmode=disable
-            owner: root
-            group: root
-            mode: "0600"
-          no_log: true
+    ###############################################################################
+    # 2) インスタンスごとに .enc.env を動的生成  ← loop を各タスクへ
+    ###############################################################################
 
-        # 2-B) sops で暗号化して所定パスへ
-        - ansible.builtin.command:
-            cmd: >
-              sops --encrypt /tmp/{{ item.name }}.env
-              --output /etc/postgres_exporter/{{ item.name }}.enc.env
-          args:
-            creates: "/etc/postgres_exporter/{{ item.name }}.enc.env"
-
-        # 2-C) 平文ファイルは即削除
-        - ansible.builtin.file:
-            path: "/tmp/{{ item.name }}.env"
-            state: absent
+    # 2-A) 平文 .env を生成
+    - name: Create plaintext .env
+      ansible.builtin.copy:
+        dest: "/tmp/{{ item.name }}.env"
+        content: |
+          DATA_SOURCE_NAME=postgresql://{{ item.db_user }}:{{ item.db_pass }}@{{ item.db_host }}:{{ item.db_port }}/{{ item.db_name }}?sslmode=disable
+        owner: root
+        group: root
+        mode: "0600"
+      no_log: true
       loop: "{{ pg_exporters }}"
 
+    # 2-B) sops で暗号化
+    - name: Encrypt .env with sops
+      ansible.builtin.command:
+        cmd: >
+          sops --encrypt /tmp/{{ item.name }}.env
+          --output /etc/postgres_exporter/{{ item.name }}.enc.env
+      args:
+        creates: "/etc/postgres_exporter/{{ item.name }}.enc.env"
+      loop: "{{ pg_exporters }}"
+
+    # 2-C) 平文ファイルを削除
+    - name: Remove plaintext .env
+      ansible.builtin.file:
+        path: "/tmp/{{ item.name }}.env"
+        state: absent
+      loop: "{{ pg_exporters }}"
+      
     ###########################################################################
     # 3) systemd テンプレート本体
     ###########################################################################
