@@ -3,9 +3,12 @@
 ###############################################################################
 - block:
 
+    ###########################################################################
+    # 0) インスタンス定義の読み込み（無ければスキップ）
+    ###########################################################################
     - name: Load instance list from designated file
       ansible.builtin.include_vars:
-        file: "{{ exporter_vars_file | default('db_default.yml') }}"
+        file: "{{ exporter_vars_file }}"
       delegate_to: localhost
 
     ###########################################################################
@@ -17,9 +20,45 @@
         state: directory
         mode: "0700"
 
-    ###############################################################################
-    # 2) インスタンスごとに .enc.env を動的生成  ← loop を各タスクへ
-    ###############################################################################
+    ###########################################################################
+    # 1.5) age 鍵を生成（初回のみ）& 公開鍵取得
+    ###########################################################################
+    - name: Check if age key exists
+      ansible.builtin.stat:
+        path: /etc/sops/age/keys.txt
+      register: age_key_stat
+
+    - name: Ensure age key directory exists
+      ansible.builtin.file:
+        path: /etc/sops/age
+        state: directory
+        owner: root
+        mode: "0700"
+
+    # Detect age-keygen path
+    - name: Find age-keygen binary
+      ansible.builtin.set_fact:
+        age_keygen_bin: >-
+          {{
+            '/usr/bin/age-keygen'
+            if (ansible_facts.packages.get('age', []) | length > 0)
+            else '/usr/local/bin/age/age-keygen'
+          }}
+
+    # Generate keypair
+    - name: Generate age keypair
+      ansible.builtin.command: "{{ age_keygen_bin }} -o /etc/sops/age/keys.txt"
+      when: not age_key_stat.stat.exists
+      changed_when: true
+
+    - name: Read age public key
+      ansible.builtin.command: grep -m1 -o 'age1[0-9a-z]*' /etc/sops/age/keys.txt
+      register: age_pub
+      changed_when: false
+
+    ###########################################################################
+    # 2) インスタンスごとに .enc.env を動的生成
+    ###########################################################################
 
     # 2-A) 平文 .env を生成
     - name: Create plaintext .env
@@ -30,18 +69,23 @@
         owner: root
         group: root
         mode: "0600"
-      no_log: true
       loop: "{{ pg_exporters }}"
+      no_log: true
+      become: true
 
-    # 2-B) sops で暗号化
-    - name: Encrypt .env with sops
+    # 2-B) sops + age 公開鍵で暗号化
+    - name: Encrypt .env with sops + age
       ansible.builtin.command:
         cmd: >
-          sops --encrypt /tmp/{{ item.name }}.env
+          /usr/bin/sops --encrypt
+          --age {{ age_pub.stdout }}
           --output /etc/postgres_exporter/{{ item.name }}.enc.env
+          /tmp/{{ item.name }}.env
       args:
         creates: "/etc/postgres_exporter/{{ item.name }}.enc.env"
       loop: "{{ pg_exporters }}"
+      register: sops_encrypt_result
+      become: true
 
     # 2-C) 平文ファイルを削除
     - name: Remove plaintext .env
@@ -49,7 +93,9 @@
         path: "/tmp/{{ item.name }}.env"
         state: absent
       loop: "{{ pg_exporters }}"
-      
+      no_log: true
+      become: true
+
     ###########################################################################
     # 3) systemd テンプレート本体
     ###########################################################################
@@ -62,6 +108,14 @@
     ###########################################################################
     # 4) インスタンスごとのポート drop-in
     ###########################################################################
+    - name: Ensure drop-in directory exists
+      ansible.builtin.file:
+        path: "/etc/systemd/system/postgres_exporter@{{ item.name }}.service.d"
+        state: directory
+        owner: root
+        mode: "0755"
+      loop: "{{ pg_exporters }}"
+
     - name: Create drop-in with listen port
       ansible.builtin.copy:
         dest: "/etc/systemd/system/postgres_exporter@{{ item.name }}.service.d/10-port.conf"
@@ -82,7 +136,8 @@
         daemon_reload: true
       loop: "{{ pg_exporters }}"
 
-  when: deploy_state | default('present') == 'present'
+  when:
+    - deploy_state | default('present') == 'present'
 
 ###############################################################################
 # ABSENT: 完全撤去

@@ -8,8 +8,8 @@ pg_exporters:
     db_pass: "{{ pgexp_pass }}"
   - name: db2
     exporter_port: 9188
-    db_host: "{{ pg_host }}"
-    db_port: "{{ pg_port }}"
+    db_host: "{{ pg_host2 }}"
+    db_port: "{{ pg_port2 }}"
     db_name: "{{ pg_db }}"
     db_user: "{{ pg_user }}"
     db_pass: "{{ pgexp_pass }}"

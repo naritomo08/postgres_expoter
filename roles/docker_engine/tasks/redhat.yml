@@ -1,7 +1,10 @@
 ###############################################################################
-# deploy_state=present のときだけ実行 ───────────────────────────────────────────
+# deploy_state=present : Podman + sops インストール & 起動
 ###############################################################################
 - block:
+    # ------------------------------------------------------------
+    # DNF キャッシュとメタデータ
+    # ------------------------------------------------------------
     - name: DNF キャッシュをクリア
       ansible.builtin.command: dnf clean all
       when: deploy_state == 'present'
@@ -10,48 +13,115 @@
       ansible.builtin.command: dnf makecache
       when: deploy_state == 'present'
 
-    # ── dnf-plugins-core（config-manager 用）
+    # ------------------------------------------------------------
+    # dnf-plugins-core（config-manager 用）
+    # ------------------------------------------------------------
     - name: dnf-plugins-core をインストール
       ansible.builtin.dnf:
         name: dnf-plugins-core
         state: present
 
-    # ── AlmaLinux9 で必要なリポジトリを有効化
-    - name: CRB リポジトリを有効化（slirp4netns 用）
+    # ------------------------------------------------------------
+    # AlmaLinux 9 で必要なリポジトリ
+    # ------------------------------------------------------------
+    - name: Enable CRB repo (slirp4netns)
       ansible.builtin.command: dnf config-manager --set-enabled crb
+      changed_when: false
 
-    - name: Extras リポジトリを有効化（container-selinux 用）
+    - name: Enable Extras repo (container-selinux)
       ansible.builtin.command: dnf config-manager --set-enabled extras
+      changed_when: false
 
-    - name: Install podman & sops
-      dnf:
+    # ---- EPEL & EPEL-next を URL 直インストール -----------------
+    - name: Install EPEL release
+      ansible.builtin.dnf:
+        name: https://dl.fedoraproject.org/pub/epel/epel-release-latest-9.noarch.rpm
+        state: present
+        disable_gpg_check: true       # 初回のみ必要
+
+    - name: Install EPEL-next release
+      ansible.builtin.dnf:
+        name: https://dl.fedoraproject.org/pub/epel/epel-next-release-latest-9.noarch.rpm
+        state: present
+        disable_gpg_check: true
+
+    - name: Enable epel-next repo
+      ansible.builtin.command: dnf config-manager --set-enabled epel-next
+      changed_when: false
+
+    # ------------------------------------------------------------
+    # Podman 関連 (まず sops を除いてインストール)
+    # ------------------------------------------------------------
+    - name: Install podman stack (without sops yet)
+      ansible.builtin.dnf:
         name:
           - podman
           - slirp4netns
           - fuse-overlayfs
           - container-selinux
-          - sops
-          - podman-docker        # docker コマンド互換が不要なら削除
+          - podman-docker          # docker コマンド互換が不要なら削除
         state: present
         allowerasing: true
 
+    # ------------------------------------------------------------
+    # sops : ① RPM → ② バイナリフォールバック
+    # ------------------------------------------------------------
+    - name: Try install sops from repo
+      ansible.builtin.dnf:
+        name: sops
+        state: present
+      register: sops_rpm
+      ignore_errors: true           # 失敗しても次へ
+
+    - name: Install sops static binary (fallback)
+      ansible.builtin.get_url:
+        url: https://github.com/mozilla/sops/releases/download/v3.10.2/sops-v3.10.2.linux.amd64
+        dest: /usr/bin/sops
+        mode: "0755"
+      when: sops_rpm is failed
+
+    # ── age インストール（Podman stack の後あたり）──────────────
+    - name: Try install age from repo
+      ansible.builtin.dnf:
+        name: age
+        state: present
+      register: age_rpm
+      ignore_errors: true
+
+    - name: Install age static binary (fallback)
+      ansible.builtin.get_url:
+        url: https://github.com/FiloSottile/age/releases/download/v1.2.1/age-v1.2.1-linux-amd64.tar.gz
+        dest: /tmp/age.tar.gz
+      when: age_rpm is failed
+
+    - name: Extract age binary
+      ansible.builtin.unarchive:
+        src: /tmp/age.tar.gz
+        dest: /usr/local/bin/
+        remote_src: true
+        creates: /usr/local/bin/age
+      when: age_rpm is failed
+
+    # ------------------------------------------------------------
+    # Podman API ソケット（任意）
+    # ------------------------------------------------------------
     - name: Enable podman.socket (optional)
-      service:
+      ansible.builtin.service:
         name: podman.socket
         state: started
         enabled: true
-      when: podman_enable_socket
+      when: podman_enable_socket | default(false)
 
   when:
     - deploy_state == 'present'
     - ansible_distribution == "AlmaLinux"
     - ansible_distribution_major_version | int == 9
 
+
 ###############################################################################
-# deploy_state=absent のときだけ実行 ───────────────────────────────────────────
+# deploy_state=absent : Podman & sops 完全撤去
 ###############################################################################
 - block:
-    # ── Podman & sops を削除
     - name: Remove Podman stack & sops
       ansible.builtin.dnf:
         name:
@@ -60,15 +130,21 @@
           - fuse-overlayfs
           - container-selinux
           - sops
-          - podman-docker        # docker コマンド互換が不要なら削除
+          - podman-docker
         state: absent
 
-    # ── podman.socket を停止
     - name: Stop & disable podman.socket
       ansible.builtin.service:
         name: podman.socket
         state: stopped
         enabled: false
+      ignore_errors: true
+
+    # （必要なら /usr/local/bin/sops バイナリも削除）
+    - name: Remove fallback sops binary
+      ansible.builtin.file:
+        path: /usr/local/bin/sops
+        state: absent
       ignore_errors: true
 
   when:

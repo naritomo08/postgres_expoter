@@ -3,6 +3,7 @@ Description=PostgreSQL Exporter (%i) via Podman
 After=network.target
 
 [Service]
+Environment="SOPS_AGE_KEY_FILE=/etc/sops/age/keys.txt"
 ExecStartPre=/usr/bin/sops --decrypt /etc/postgres_exporter/%i.enc.env > /run/secrets/%i.env
 ExecStart=/usr/bin/podman run --rm \
         --env-file /run/secrets/%i.env \
@@ -14,7 +15,7 @@ ExecStopPost=/usr/bin/rm -f /run/secrets/%i.env
 RuntimeDirectory=secrets
 RuntimeDirectoryMode=0750
 ProtectSystem=full
-ProtectHome=yes
+ProtectHome=yes 
 
 [Install]
 WantedBy=multi-user.target
