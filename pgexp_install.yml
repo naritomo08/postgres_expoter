@@ -6,7 +6,7 @@
   vars:
     apply: "{{ deploy_state | default('present') == 'present' }}"
   roles:
-    - { role: docker_engine,       when: apply }      # ① 先に Docker/Compose
+    - { role: podman_engine,       when: apply }      # ① 先に podman
     - { role: postgres_exporter,   when: apply }      # ② その上に Exporter
 
 # ───────────────────────────── ②  撤去モード (deploy_state=absent) ─────────────────────────────
@@ -16,5 +16,5 @@
   vars:
     apply: "{{ deploy_state | default('present') == 'absent' }}"
   roles:
-    - { role: postgres_exporter,   when: apply }      # ① Exporter/secret/compose を削除
-    - { role: docker_engine,       when: apply }      # ② 最後に Docker/Compose をアンインストール
+    - { role: podman_exporter,   when: apply }      # ① Exporter を削除
+    - { role: podman_engine,       when: apply }      # ② 最後に Podman をアンインストール

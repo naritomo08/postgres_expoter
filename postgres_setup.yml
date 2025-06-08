@@ -23,6 +23,7 @@
   vars:
     apply: "{{ deploy_state | default('present') == 'absent' }}"
   roles:
+    - { role: postgres_exporter_user,       when: apply }
   
 - name: Remove stack when deploy_state=absent
   hosts: postgres_host
