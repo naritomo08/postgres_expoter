@@ -1,15 +1,15 @@
+###########################################################################
+# 0) インスタンス定義の読み込み（無ければスキップ）
+###########################################################################
+- name: Load instance list from designated file
+  ansible.builtin.include_vars:
+    file: "{{ exporter_vars_file }}"
+  delegate_to: localhost
+
 ###############################################################################
 # PRESENT: Podman + sops インストール & Exporter 起動
 ###############################################################################
 - block:
-
-    ###########################################################################
-    # 0) インスタンス定義の読み込み（無ければスキップ）
-    ###########################################################################
-    - name: Load instance list from designated file
-      ansible.builtin.include_vars:
-        file: "{{ exporter_vars_file }}"
-      delegate_to: localhost
 
     ###########################################################################
     # 1) secrets ディレクトリ
@@ -170,7 +170,13 @@
           +
           ['/etc/systemd/system/postgres_exporter@.service']
         }}
-  
+    
+    - name: Remove fallback apt key
+      ansible.builtin.file:
+        path: /etc/sops/age/keys.txt
+        state: absent
+      ignore_errors: true
+
   when:
     - deploy_state == 'absent'
 

@@ -122,6 +122,12 @@
 # deploy_state=absent : Podman & sops 完全撤去
 ###############################################################################
 - block:
+    - name: Remove fallback sops binary
+      ansible.builtin.file:
+        path: /usr/local/bin/sops
+        state: absent
+      ignore_errors: true
+
     - name: Remove Podman stack & sops
       ansible.builtin.dnf:
         name:
@@ -140,7 +146,6 @@
         enabled: false
       ignore_errors: true
 
-    # （必要なら /usr/local/bin/sops バイナリも削除）
     - name: Remove fallback sops binary
       ansible.builtin.file:
         path: /usr/local/bin/sops
