@@ -1,4 +1,3 @@
-exporter_version: "v0.15.0"
 exporter_dir: "/opt/postgres-exporter"
 
 # rootfull API ソケットを有効にしたいとき true
