@@ -127,6 +127,12 @@
         state: absent
       ignore_errors: true
 
+    - name: Remove fallback age
+      ansible.builtin.file:
+        path: /usr/local/bin/age
+        state: absent
+      ignore_errors: true
+
     - name: Remove Podman stack & sops
       ansible.builtin.dnf:
         name:
@@ -134,7 +140,6 @@
           - slirp4netns
           - fuse-overlayfs
           - container-selinux
-          - sops
           - podman-docker
         state: absent
 
@@ -143,12 +148,6 @@
         name: podman.socket
         state: stopped
         enabled: false
-      ignore_errors: true
-
-    - name: Remove fallback sops binary
-      ansible.builtin.file:
-        path: /usr/local/bin/sops
-        state: absent
       ignore_errors: true
       when: podman_enable_socket | default(false)
 

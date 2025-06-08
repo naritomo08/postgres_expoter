@@ -126,6 +126,8 @@
         mode: "0644"
       loop: "{{ pg_exporters }}"
 
+    - meta: flush_handlers
+
     ###########################################################################
     # 5) 起動
     ###########################################################################
@@ -170,6 +172,7 @@
           +
           ['/etc/systemd/system/postgres_exporter@.service']
         }}
+      notify: reload systemd
     
     - name: Remove fallback apt key
       ansible.builtin.file:
@@ -177,6 +180,13 @@
         state: absent
       ignore_errors: true
 
+    - name: Remove secrets dir
+      ansible.builtin.file:
+        path: /etc/postgres_exporter
+        state: absent
+      ignore_errors: true
+
+    - meta: flush_handlers
   when:
     - deploy_state == 'absent'
 
