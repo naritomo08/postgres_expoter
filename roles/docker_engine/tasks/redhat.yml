@@ -151,6 +151,7 @@
         path: /usr/local/bin/sops
         state: absent
       ignore_errors: true
+      when: podman_enable_socket | default(false)
 
   when:
     - deploy_state == 'absent'
