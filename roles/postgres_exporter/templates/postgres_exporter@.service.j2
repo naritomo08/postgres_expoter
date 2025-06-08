@@ -1,0 +1,20 @@
+[Unit]
+Description=PostgreSQL Exporter (%i) via Podman
+After=network.target
+
+[Service]
+ExecStartPre=/usr/bin/sops --decrypt /etc/postgres_exporter/%i.enc.env > /run/secrets/%i.env
+ExecStart=/usr/bin/podman run --rm \
+        --env-file /run/secrets/%i.env \
+        --network host \
+        quay.io/prometheuscommunity/postgres-exporter:{{ exporter_version }} \
+        --web.listen-address=:$${pg_exporter_port}
+ExecStopPost=/usr/bin/rm -f /run/secrets/%i.env
+
+RuntimeDirectory=secrets
+RuntimeDirectoryMode=0750
+ProtectSystem=full
+ProtectHome=yes
+
+[Install]
+WantedBy=multi-user.target

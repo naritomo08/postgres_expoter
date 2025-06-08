@@ -1,2 +1,5 @@
+exporter_version: "v0.15.0"
 exporter_dir: "/opt/postgres-exporter"
-secret_name:  "pgexp_pass"
+
+# rootfull API ソケットを有効にしたいとき true
+podman_enable_socket: false

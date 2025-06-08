@@ -1,54 +1,112 @@
----
-- name: Ensure exporter directory (present only)
-  file:
-    path: "{{ exporter_dir }}"
-    state: directory
-    owner: root
-    mode: "0755"
-  when: deploy_state == "present"
+###############################################################################
+# PRESENT: Podman + sops インストール & Exporter 起動
+###############################################################################
+- block:
 
-# ── Swarm初期化（初回のみ） ─────────────────────────────
-- name: Initialize Docker Swarm (only if not already)
-  shell: docker swarm init || true
-  when: deploy_state == 'present'
+    - name: Load instance list from designated file
+      ansible.builtin.include_vars:
+        file: "{{ exporter_vars_file | default('db_default.yml') }}"
+      delegate_to: localhost
 
-# ── Secret 登録（再作成） ───────────────────────────────
-- name: Remove existing Docker secret (if exists)
-  shell: docker secret rm pgexp_pass || true
-  when: deploy_state == 'present'
+    ###########################################################################
+    # 1) secrets ディレクトリ
+    ###########################################################################
+    - name: Ensure secrets dir
+      ansible.builtin.file:
+        path: /etc/postgres_exporter
+        state: directory
+        mode: "0700"
 
-- name: Create Docker secret for pgexp_pass
-  shell: echo "{{ pgexp_pass | trim }}" | docker secret create pgexp_pass -
-  when: deploy_state == 'present'
+    ###########################################################################
+    # 2) インスタンスごとに .enc.env を動的生成
+    ###########################################################################
+    - name: Build encrypted secret per exporter   # ←★★ 変更ポイント
+      block:
+        # 2-A) 平文 .env を一時ファイルに生成（no_log で出力抑制）
+        - ansible.builtin.copy:
+            dest: "/tmp/{{ item.name }}.env"
+            content: |
+              DATA_SOURCE_NAME=postgresql://{{ item.db_user }}:{{ item.db_pass }}@{{ item.db_host }}:{{ item.db_port }}/{{ item.db_name }}?sslmode=disable
+            owner: root
+            group: root
+            mode: "0600"
+          no_log: true
 
-# ── Composeファイル生成（Swarm用） ───────────────────────
-- name: Render stack-compatible compose file
-  template:
-    src: docker-compose-single.yml.j2
-    dest: "{{ exporter_dir }}/docker-compose.yml"
-    mode: "0600"
-  when: deploy_state == "present"
+        # 2-B) sops で暗号化して所定パスへ
+        - ansible.builtin.command:
+            cmd: >
+              sops --encrypt /tmp/{{ item.name }}.env
+              --output /etc/postgres_exporter/{{ item.name }}.enc.env
+          args:
+            creates: "/etc/postgres_exporter/{{ item.name }}.enc.env"
 
-# ── Swarm スタックデプロイ ───────────────────────────────
-- name: Deploy exporter stack
-  shell: docker stack deploy -c docker-compose.yml postgres_exporter
-  args:
-    chdir: "{{ exporter_dir }}"
-  when: deploy_state == 'present'
+        # 2-C) 平文ファイルは即削除
+        - ansible.builtin.file:
+            path: "/tmp/{{ item.name }}.env"
+            state: absent
+      loop: "{{ pg_exporters }}"
 
-# ── Swarm スタック削除（停止）──────────────────────────────
-- name: Remove exporter stack
-  shell: docker stack rm postgres_exporter
-  when: deploy_state == 'absent'
+    ###########################################################################
+    # 3) systemd テンプレート本体
+    ###########################################################################
+    - name: Deploy template unit
+      ansible.builtin.template:
+        src: postgres_exporter@.service.j2
+        dest: /etc/systemd/system/postgres_exporter@.service
+        mode: "0644"
 
-# ── Secret 削除（オプション）──────────────────────────────
-- name: Remove Docker secret
-  shell: docker secret rm pgexp_pass || true
-  when: deploy_state == 'absent'
+    ###########################################################################
+    # 4) インスタンスごとのポート drop-in
+    ###########################################################################
+    - name: Create drop-in with listen port
+      ansible.builtin.copy:
+        dest: "/etc/systemd/system/postgres_exporter@{{ item.name }}.service.d/10-port.conf"
+        content: |
+          [Service]
+          Environment="pg_exporter_port={{ item.exporter_port }}"
+        mode: "0644"
+      loop: "{{ pg_exporters }}"
 
-# ── ディレクトリ削除（rollback）────────────────────────────
-- name: Remove exporter directory
-  file:
-    path: "{{ exporter_dir }}"
-    state: absent
-  when: deploy_state == "absent"
+    ###########################################################################
+    # 5) 起動
+    ###########################################################################
+    - name: Enable & start each exporter
+      ansible.builtin.systemd:
+        name: "postgres_exporter@{{ item.name }}"
+        enabled: true
+        state: restarted
+        daemon_reload: true
+      loop: "{{ pg_exporters }}"
+
+  when: deploy_state | default('present') == 'present'
+
+###############################################################################
+# ABSENT: 完全撤去
+###############################################################################
+- block:
+    - name: Stop & disable instances
+      ansible.builtin.systemd:
+        name: "postgres_exporter@{{ item.name }}"
+        state: stopped
+        enabled: false
+      loop: "{{ pg_exporters }}"
+      ignore_errors: true
+
+    - name: Remove drop-in & enc.env, template unit
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: absent
+      loop: >
+        {{
+          pg_exporters
+            | map(attribute='name')
+            | map('regex_replace','(.*)','/etc/systemd/system/postgres_exporter@\\1.service.d')
+            | list
+          +
+          pg_exporters
+            | map(attribute='name')
+            | map('regex_replace','(.*)','/etc/postgres_exporter/\\1.enc.env')
+            | list
+          +
+          ['/etc/systemd/system/postgres_exporter@.service']
+        }}

@@ -3,61 +3,44 @@
 ###############################################################################
 - block:
     - name: DNF キャッシュをクリア
-      command: dnf clean all
+      ansible.builtin.command: dnf clean all
       when: deploy_state == 'present'
 
     - name: DNF メタデータを更新
-      command: dnf makecache
+      ansible.builtin.command: dnf makecache
       when: deploy_state == 'present'
 
-    # ── config-manager 用プラグイン
-    - name: dnf-plugins-core をインストール（config-manager 用）
-      dnf:
+    # ── dnf-plugins-core（config-manager 用）
+    - name: dnf-plugins-core をインストール
+      ansible.builtin.dnf:
         name: dnf-plugins-core
         state: present
 
     # ── AlmaLinux9 で必要なリポジトリを有効化
     - name: CRB リポジトリを有効化（slirp4netns 用）
-      command: dnf config-manager --set-enabled crb
+      ansible.builtin.command: dnf config-manager --set-enabled crb
 
     - name: Extras リポジトリを有効化（container-selinux 用）
-      command: dnf config-manager --set-enabled extras
+      ansible.builtin.command: dnf config-manager --set-enabled extras
 
-    # ── Docker 用リポジトリ
-    - name: Add Docker repo
-      get_url:
-        url: https://download.docker.com/linux/centos/docker-ce.repo
-        dest: /etc/yum.repos.d/docker-ce.repo
-        mode: "0644"
-
-    - name: Disable nightly & test repo
-      ini_file:
-        path: /etc/yum.repos.d/docker-ce.repo
-        section: "{{ repo_name }}"
-        option: enabled
-        value: "0"
-      loop:
-        - docker-ce-nightly
-        - docker-ce-test
-      loop_control:
-        loop_var: repo_name
-
-    - name: Install Docker Engine & Compose v2
+    - name: Install podman & sops
       dnf:
         name:
-          - docker-ce
-          - docker-ce-cli
-          - containerd.io
-          - docker-buildx-plugin
-          - docker-compose-plugin
+          - podman
+          - slirp4netns
+          - fuse-overlayfs
+          - container-selinux
+          - sops
+          - podman-docker        # docker コマンド互換が不要なら削除
         state: present
         allowerasing: true
 
-    - name: Enable & start docker service
+    - name: Enable podman.socket (optional)
       service:
-        name: docker
+        name: podman.socket
         state: started
         enabled: true
+      when: podman_enable_socket
 
   when:
     - deploy_state == 'present'
@@ -68,25 +51,27 @@
 # deploy_state=absent のときだけ実行 ───────────────────────────────────────────
 ###############################################################################
 - block:
-    - name: Remove Docker Engine & Compose v2
-      dnf:
+    # ── Podman & sops を削除
+    - name: Remove Podman stack & sops
+      ansible.builtin.dnf:
         name:
-          - docker-ce
-          - docker-ce-cli
-          - containerd.io
-          - docker-buildx-plugin
-          - docker-compose-plugin
+          - podman
+          - slirp4netns
+          - fuse-overlayfs
+          - container-selinux
+          - sops
+          - podman-docker        # docker コマンド互換が不要なら削除
         state: absent
 
-    - name: Stop & disable docker service
-      service:
-        name: docker
+    # ── podman.socket を停止
+    - name: Stop & disable podman.socket
+      ansible.builtin.service:
+        name: podman.socket
         state: stopped
         enabled: false
       ignore_errors: true
 
-    - name: Remove docker repo file
-      file:
-        path: /etc/yum.repos.d/docker-ce.repo
-        state: absent
-  when: deploy_state == 'absent'
+  when:
+    - deploy_state == 'absent'
+    - ansible_distribution == "AlmaLinux"
+    - ansible_distribution_major_version | int == 9
