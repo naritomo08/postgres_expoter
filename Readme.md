@@ -1,6 +1,6 @@
 # postgres_expoter
 
-ansibleでDockerCompose/Postgre_Expoterを導入するPlaybook
+ansibleでpodman/Postgre_Expoterを導入するPlaybook
 
 ## DBパスワード設定
 
