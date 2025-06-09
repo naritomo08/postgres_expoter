@@ -154,26 +154,45 @@
       loop: "{{ pg_exporters }}"
       ignore_errors: true
 
-    - name: Remove drop-in & enc.env, template unit
+    - name: Drop-in 内の設定ファイルを検索
+      become: true
+      ansible.builtin.find:
+        paths: /etc/systemd/system
+        patterns: "postgres_exporter@*.service.d/*.conf"
+        file_type: file
+      register: dropin_files
+
+    - name: Drop-in の設定ファイルを削除
+      become: true
       ansible.builtin.file:
-        path: "{{ item }}"
+        path: "{{ item.path }}"
         state: absent
-      loop: >
-        {{
-          pg_exporters
-            | map(attribute='name')
-            | map('regex_replace','(.*)','/etc/systemd/system/postgres_exporter@\\1.service.d')
-            | list
-          +
-          pg_exporters
-            | map(attribute='name')
-            | map('regex_replace','(.*)','/etc/postgres_exporter/\\1.enc.env')
-            | list
-          +
-          ['/etc/systemd/system/postgres_exporter@.service']
-        }}
+      loop: "{{ dropin_files.files }}"
       notify: reload systemd
-    
+
+    - name: Drop-in ディレクトリ本体を削除
+      become: true
+      ansible.builtin.file:
+        path: "/etc/systemd/system/postgres_exporter@{{ item.name }}.service.d"
+        state: absent
+      loop: "{{ pg_exporters }}"
+      notify: reload systemd
+  
+    - name: enc.env ファイルを削除
+      become: true
+      ansible.builtin.file:
+        path: "/etc/postgres_exporter/{{ item.name }}.enc.env"
+        state: absent
+      loop: "{{ pg_exporters }}"
+      notify: reload systemd
+
+    - name: template ユニットファイルを削除
+      become: true
+      ansible.builtin.file:
+        path: /etc/systemd/system/postgres_exporter@.service
+        state: absent
+      notify: reload systemd
+
     - name: Remove fallback apt key
       ansible.builtin.file:
         path: /etc/sops/age/keys.txt
