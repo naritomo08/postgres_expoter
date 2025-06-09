@@ -16,5 +16,5 @@
   vars:
     apply: "{{ deploy_state | default('present') == 'absent' }}"
   roles:
-    - { role: podman_exporter,   when: apply }      # ① Exporter を削除
+    - { role: postgres_exporter,   when: apply }      # ① Exporter を削除
     - { role: podman_engine,       when: apply }      # ② 最後に Podman をアンインストール
