@@ -5,7 +5,7 @@ After=network.target
 [Service]
 Environment="SOPS_AGE_KEY_FILE=/etc/sops/age/keys.txt"
 ExecStartPre=/usr/bin/sops --decrypt --output /run/secrets/%i.env /etc/postgres_exporter/%i.enc.env
-ExecStart=/usr/bin/podman run --rm --name postgres_exporter_%i --env-file /run/secrets/%i.env --log-driver=journald --network host quay.io/prometheuscommunity/postgres-exporter:{{exporter_version}} --web.listen-address=:${pg_exporter_port}
+ExecStart=/usr/bin/podman run --rm --replace --name postgres_exporter_%i --env-file /run/secrets/%i.env --log-driver=journald --network host quay.io/prometheuscommunity/postgres-exporter:{{exporter_version}} --web.listen-address=:${pg_exporter_port}
 ExecStopPost=/usr/bin/rm -f /run/secrets/%i.env
 RuntimeDirectory=secrets
 RuntimeDirectoryMode=0750
